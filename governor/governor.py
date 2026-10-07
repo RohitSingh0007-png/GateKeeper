@@ -1,4 +1,5 @@
 import os
+import sys
 
 CGROUP_ROOT = "/sys/fs/cgroup"
 CPU_PERIOD_US = 100000
@@ -14,7 +15,11 @@ def create_cgroup(tenant_id: str, cpu_quota_percent: int) -> str:
 
     return path
 
+def assign_pid(cgroup_path: str, pid: int) -> None:
+    with open(os.path.join(cgroup_path, "cgroup.procs"), "w") as f:
+        f.write(str(pid))
 
 if __name__ == "__main__":
-    print(create_cgroup("1", 20))
-
+    path = create_cgroup("1", 20)
+    assign_pid(path, int(sys.argv[1]))
+    print(f"PID {sys.argv[1]} assigned to {path}")
