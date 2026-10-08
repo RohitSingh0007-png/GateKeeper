@@ -1,7 +1,7 @@
 import os
-import sys
+import threading
 
-import psycopg2
+from psycopg2 import pool
 
 CGROUP_ROOT = "/sys/fs/cgroup"
 CPU_PERIOD_US = 100000
@@ -24,26 +24,51 @@ def assign_pid(cgroup_path: str, pid: int) -> None:
         f.write(str(pid))
 
 
-def get_connection(tenant_id: str):
-    conn = psycopg2.connect(DATABASE_URL)
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT pg_backend_pid()")
-            pid = cur.fetchone()[0]
-        conn.commit()
+class TenantGovernor:
+    def __init__(self, minconn: int = 1, maxconn: int = 5):
+        self._minconn = minconn
+        self._maxconn = maxconn
+        self._pools = {}
+        self._assigned_pids = set()
+        self._lock = threading.Lock()
 
-        cgroup_path = create_cgroup(tenant_id, 20)
-        assign_pid(cgroup_path, pid)
-    except Exception:
-        conn.close()
-        raise
-    return conn
+    def _get_pool(self, tenant_id: str):
+        with self._lock:
+            if tenant_id not in self._pools:
+                self._pools[tenant_id] = pool.ThreadedConnectionPool(
+                    self._minconn, self._maxconn, DATABASE_URL
+                )
+            return self._pools[tenant_id]
+
+    def get_connection(self, tenant_id: str):
+        tenant_pool = self._get_pool(tenant_id)
+        conn = tenant_pool.getconn()
+        pid = conn.info.backend_pid
+
+        if pid not in self._assigned_pids:
+            try:
+                cgroup_path = create_cgroup(tenant_id, 20)
+                assign_pid(cgroup_path, pid)
+            except Exception:
+                tenant_pool.putconn(conn, close=True)
+                raise
+            self._assigned_pids.add(pid)
+
+        return conn
+
+
+def cgroup_of(pid: int) -> str:
+    with open(f"/proc/{pid}/cgroup") as f:
+        return f.read().strip()
 
 
 if __name__ == "__main__":
-    conn = get_connection("1")
-    with conn.cursor() as cur:
-        cur.execute("SELECT pg_backend_pid()")
-        print("backend PID:", cur.fetchone()[0])
-    input("Connection open. Verify from another terminal, then press Enter...")
-    conn.close()
+    gov = TenantGovernor()
+    connections = [
+        ("tenant 1, conn A", gov.get_connection("1")),
+        ("tenant 1, conn B", gov.get_connection("1")),
+        ("tenant 2, conn A", gov.get_connection("2")),
+    ]
+    for label, conn in connections:
+        pid = conn.info.backend_pid
+        print(f"{label}: PID {pid} -> {cgroup_of(pid)}")
