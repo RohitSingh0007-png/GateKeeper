@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
+
+{% block title %}Customers{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">{{ tenant.name }}</p>
+        <h1>Customers</h1>
+        <p class="page-subtitle">{{ customers | length }} customer{{ "s" if customers | length != 1 }} in your workspace.</p>
+    </div>
+    {% if data_source == "development" %}{{ ui.badge("Sample data", "neutral") }}{% endif %}
+</header>
+
+<section class="card card--flush">
+    {% if customers %}
+    <div class="table-wrap">
+        <table class="table">
+            <caption class="sr-only">Customers of {{ tenant.name }}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Customer ID</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Customer since</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for customer in customers %}
+                <tr>
+                    <td class="mono">{{ customer.id }}</td>
+                    <td class="strong">{{ customer.name }}</td>
+                    <td class="muted">{{ customer.email }}</td>
+                    <td>{{ ui.record_badge(customer.status) }}</td>
+                    <td class="muted">{{ customer.created_at }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ ui.empty_state("No customers yet", "Customers added to your workspace will appear here.", "users") }}
+    {% endif %}
+</section>
+{% endblock %}

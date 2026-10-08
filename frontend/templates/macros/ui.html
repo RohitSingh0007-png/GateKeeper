@@ -1,0 +1,71 @@
+{# Shared UI components for tenant and admin pages.
+   Import with context so meter() can read warn_ratio:
+   {% import "macros/ui.html" as ui with context %} #}
+{% from "macros/layout.html" import icon %}
+
+{% macro badge(label, tone="neutral") -%}
+<span class="badge badge--{{ tone }}">{{ label }}</span>
+{%- endmacro %}
+
+{# Tenant usage status. Labels and tones are mirrored in static/js/admin.js. #}
+{% macro status_badge(status) -%}
+{%- set labels = {"healthy": "Healthy", "warning": "Near limit", "throttled": "Throttled", "idle": "Idle", "offline": "Offline"} -%}
+{%- set tones = {"healthy": "success", "warning": "warning", "throttled": "danger", "idle": "neutral", "offline": "danger"} -%}
+<span class="badge badge--{{ tones.get(status, 'neutral') }}" data-field="status">{{ labels.get(status, status | title) }}</span>
+{%- endmacro %}
+
+{# Status of a customer or order record. #}
+{% macro record_badge(status) -%}
+{%- set tones = {"active": "success", "inactive": "neutral", "delivered": "success", "paid": "info", "shipped": "info", "pending": "warning", "refunded": "neutral"} -%}
+{{ badge(status | title, tones.get(status, "neutral")) }}
+{%- endmacro %}
+
+{% macro plan_badge(plan) -%}
+<span class="badge badge--plan badge--plan-{{ plan }}">{{ plan | title }}</span>
+{%- endmacro %}
+
+{% macro stat(label, value, hint=none, href=none, tone=none, field=none) -%}
+<div class="stat{{ ' stat--' ~ tone if tone }}"{% if field %} data-stat-card="{{ field }}"{% endif %}>
+    <span class="stat__label">{{ label }}</span>
+    <span class="stat__value"{% if field %} data-stat="{{ field }}"{% endif %}>{{ value }}</span>
+    {% if hint %}
+    <span class="stat__hint">{% if href %}<a href="{{ href }}">{{ hint }}</a>{% else %}{{ hint }}{% endif %}</span>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+{# Usage against a quota. `used` is none when the tenant has no open session.
+   `field` names the data-field hooks admin.js uses to update the meter. #}
+{% macro meter(label, used, limit, unit, field, decimals=0, compact=false) -%}
+{%- if used is none -%}
+    {%- set pct = 0 -%}
+    {%- set tone = "idle" -%}
+    {%- set text = "No session" -%}
+{%- else -%}
+    {%- set pct = ([used / limit * 100, 100] | min) if limit else 0 -%}
+    {%- set tone = "danger" if pct >= 100 else ("warning" if pct >= warn_ratio * 100 else "ok") -%}
+    {%- set text = ("%." ~ decimals ~ "f") | format(used) ~ unit ~ " / " ~ limit ~ unit -%}
+{%- endif -%}
+<div class="meter{{ ' meter--compact' if compact }}">
+    <div class="meter__head">
+        <span class="meter__label">{{ label }}</span>
+        <span class="meter__value" data-field="{{ field }}-text">{{ text }}</span>
+    </div>
+    <div class="meter__track" role="progressbar" aria-label="{{ label }} usage against quota"
+         aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct | round | int }}" data-field="{{ field }}-bar">
+        <div class="meter__fill meter__fill--{{ tone }}" style="width: {{ pct | round(1) }}%"></div>
+    </div>
+</div>
+{%- endmacro %}
+
+{% macro empty_state(title, text, icon_name="inbox") -%}
+<div class="empty">
+    {{ icon(icon_name) }}
+    <p class="empty__title">{{ title }}</p>
+    <p class="empty__text">{{ text }}</p>
+</div>
+{%- endmacro %}
+
+{% macro money(amount) -%}
+₹{{ "{:,.2f}".format(amount) }}
+{%- endmacro %}
