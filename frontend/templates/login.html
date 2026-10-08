@@ -1,11 +1,56 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Gatekeeper — Login</title>
-</head>
-<body>
-    <h1>Login</h1>
+{% extends "base.html" %}
+{% from "macros/layout.html" import icon, brand %}
 
-    <!-- TODO: build real login form -->
-</body>
-</html>
+{% block title %}Sign in{% endblock %}
+
+{% block layout %}
+<main class="auth">
+    <section class="auth__intro">
+        {{ brand(large=true) }}
+        <h1 class="auth__headline">Kernel-level resource isolation for multi-tenant PostgreSQL.</h1>
+        <ul class="auth__points">
+            <li>{{ icon("cpu") }}<span>Per-tenant CPU and memory quotas enforced through Linux cgroups v2</span></li>
+            <li>{{ icon("layers") }}<span>Session pooling keeps each tenant on its own database backend process</span></li>
+            <li>{{ icon("activity") }}<span>Usage and throttling visibility for platform operators</span></li>
+        </ul>
+    </section>
+
+    <section class="auth__panel">
+        <div class="auth-card">
+            <div>
+                <h2 class="auth-card__title">Sign in</h2>
+                <p class="auth-card__subtitle">Use your tenant or administrator account.</p>
+            </div>
+
+            {% if error %}
+            <div class="alert alert--error" role="alert">{{ error }}</div>
+            {% endif %}
+
+            <form method="post" action="/login" class="form" id="login-form">
+                <div class="field">
+                    <label for="username">Username</label>
+                    <input id="username" name="username" type="text" autocomplete="username"
+                           value="{{ username or '' }}" required autofocus>
+                </div>
+                <div class="field">
+                    <div class="field__row">
+                        <label for="password">Password</label>
+                        <button type="button" class="link-btn" id="toggle-password"
+                                aria-controls="password" aria-pressed="false">Show</button>
+                    </div>
+                    <input id="password" name="password" type="password" autocomplete="current-password" required>
+                </div>
+                <button type="submit" class="btn btn--primary btn--block" id="login-submit">Sign in</button>
+            </form>
+
+            {% if dev_mode %}
+            <p class="auth-card__note">{{ icon("lock") }}<span>Development server: test accounts are listed in <code>frontend/dev_data.py</code>.</span></p>
+            {% endif %}
+        </div>
+    </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/login.js') }}" defer></script>
+{% endblock %}
