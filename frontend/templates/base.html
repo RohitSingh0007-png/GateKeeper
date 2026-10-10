@@ -1,0 +1,66 @@
+{% from "macros/layout.html" import icon, brand %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Dashboard{% endblock %} · GateKeeper</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z' fill='%234565e8'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/base.css') }}">
+    {% block styles %}{% endblock %}
+</head>
+<body>
+{% block layout %}
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="shell">
+    <aside class="sidebar">
+        {{ brand(href="/") }}
+
+        {% if user and user.role == "admin" %}
+            {% set nav_links = [("admin", "/admin", "Admin console", "shield")] %}
+        {% else %}
+            {% set nav_links = [
+                ("dashboard", "/tenant", "Dashboard", "grid"),
+                ("customers", "/tenant/customers", "Customers", "users"),
+                ("orders", "/tenant/orders", "Orders", "file"),
+            ] %}
+        {% endif %}
+        <nav class="nav" aria-label="Main">
+            {% for key, href, label, icon_name in nav_links %}
+            <a class="nav__link{{ ' is-active' if active_page == key }}" href="{{ href }}"{% if active_page == key %} aria-current="page"{% endif %}>
+                {{ icon(icon_name) }}<span>{{ label }}</span>
+            </a>
+            {% endfor %}
+        </nav>
+
+        {% if user %}
+        <div class="sidebar__footer">
+            <div class="user-chip">
+                <span class="user-chip__avatar" aria-hidden="true">{{ user.username[:1] | upper }}</span>
+                <span class="user-chip__text">
+                    <span class="user-chip__name">{{ user.username }}</span>
+                    <span class="user-chip__role">{{ user.tenant.name if user.tenant else "Platform admin" }}</span>
+                </span>
+            </div>
+            <form method="post" action="/logout">
+                <button type="submit" class="btn btn--ghost btn--sm btn--block">{{ icon("logout") }}<span>Log out</span></button>
+            </form>
+        </div>
+        {% endif %}
+    </aside>
+
+    <div class="main">
+        {% if governor_mode == "stub" %}
+        <div class="env-banner" role="note">
+            <strong>Development mode.</strong> Usage values come from the StubGovernor and are simulated. No cgroup limits are being applied.
+        </div>
+        {% endif %}
+        <main id="main" class="content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

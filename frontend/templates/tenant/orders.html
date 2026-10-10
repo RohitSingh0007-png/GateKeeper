@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% import "macros/ui.html" as ui with context %}
+
+{% block title %}Orders{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">{{ tenant.name }}</p>
+        <h1>Orders</h1>
+        <p class="page-subtitle">Every order placed in your workspace, newest first.</p>
+    </div>
+    {% if data_source == "development" %}{{ ui.badge("Sample data", "neutral") }}{% endif %}
+</header>
+
+<section class="stat-grid stat-grid--3" aria-label="Order summary">
+    {{ ui.stat("Total orders", summary.count) }}
+    {{ ui.stat("Revenue", ui.money(summary.revenue), hint="Excludes refunded orders") }}
+    {{ ui.stat("Open orders", summary.open, hint="Pending, paid or shipped") }}
+</section>
+
+<section class="card card--flush">
+    {% if orders %}
+    <div class="table-wrap">
+        <table class="table">
+            <caption class="sr-only">Orders of {{ tenant.name }}</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Order ID</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="num">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td class="mono">#{{ order.id }}</td>
+                    <td class="strong">{{ order.customer }}</td>
+                    <td class="muted">{{ order.created_at }}</td>
+                    <td>{{ ui.record_badge(order.status) }}</td>
+                    <td class="num">{{ ui.money(order.amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ ui.empty_state("No orders yet", "Orders placed in your workspace will appear here.", "file") }}
+    {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "macros/layout.html" import icon %}
+{% import "macros/ui.html" as ui with context %}
+
+{% block title %}Admin console{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">Platform operator</p>
+        <h1>Admin console</h1>
+        <p class="page-subtitle">Per-tenant CPU, memory and throttling for the shared PostgreSQL instance.</p>
+    </div>
+    <div class="header-actions">
+        <div class="system-status">
+            {% if governor_mode == "enforced" %}{{ ui.badge("Governor enforcing", "success") }}{% else %}{{ ui.badge("Governor: stub mode", "warning") }}{% endif %}
+            <span class="meta">Updated <time id="usage-updated" datetime="{{ updated_at or '' }}" data-local-time>{{ updated_at or "never" }}</time></span>
+        </div>
+        <button type="button" class="btn btn--secondary" id="usage-refresh">{{ icon("refresh") }}<span>Refresh</span></button>
+    </div>
+</header>
+
+<div class="alert alert--error page-alert" id="usage-error" role="alert" hidden></div>
+
+<section class="stat-grid" aria-label="Tenant overview">
+    {{ ui.stat("Total tenants", summary.total) }}
+    {{ ui.stat("Active tenants", summary.active, hint="With an open database session", field="active") }}
+    {{ ui.stat("Throttled tenants", summary.throttled, hint="Throttled in the latest sample", tone="danger" if summary.throttled, field="throttled") }}
+    {{ ui.stat("Average CPU", ("%.1f%%" | format(summary.avg_cpu)) if summary.avg_cpu is not none else "—", hint="Across active tenants", field="avg-cpu") }}
+</section>
+
+<section class="card card--flush" aria-labelledby="tenants-title">
+    <div class="card__header">
+        <div>
+            <h2 id="tenants-title" class="card__title">Tenants</h2>
+            <p class="card__subtitle">CPU and memory are shown against each plan's quota.</p>
+        </div>
+    </div>
+    <div class="table-wrap">
+        <table class="table" id="tenant-table" data-usage-url="{{ usage_url }}" data-warn-ratio="{{ warn_ratio }}">
+            <caption class="sr-only">Tenant resource usage</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Tenant</th>
+                    <th scope="col">Plan</th>
+                    <th scope="col">CPU</th>
+                    <th scope="col">Memory</th>
+                    <th scope="col" class="num">Throttling</th>
+                    <th scope="col">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr data-tenant-id="{{ row.tenant.id }}"
+                    data-cpu-quota="{{ row.tenant.cpu_quota_percent }}"
+                    data-memory-limit="{{ row.tenant.memory_limit_mb }}">
+                    <td>
+                        <div class="tenant-cell">
+                            <span class="tenant-cell__name">{{ row.tenant.name }}</span>
+                            <span class="tenant-cell__id">ID {{ row.tenant.id }}</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="tenant-cell">
+                            {{ ui.plan_badge(row.tenant.plan) }}
+                            <span class="tenant-cell__id">{{ row.tenant.cpu_quota_percent }}% CPU · {{ row.tenant.memory_limit_mb }} MB</span>
+                        </div>
+                    </td>
+                    <td class="col-meter">{{ ui.meter("CPU", row.usage.cpu_percent if row.usage else none, row.tenant.cpu_quota_percent, "%", "cpu", decimals=1, compact=true) }}</td>
+                    <td class="col-meter">{{ ui.meter("Memory", row.usage.memory_used_mb if row.usage else none, row.tenant.memory_limit_mb, " MB", "memory", compact=true) }}</td>
+                    <td class="num" data-field="throttled">{{ "{:,}".format(row.usage.throttled_ms) ~ " ms" if row.usage else "—" }}</td>
+                    <td>{{ ui.status_badge(row.status) }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6">{{ ui.empty_state("No tenants yet", "Tenants created in the tenants table will be listed here.", "users") }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<div class="grid-2">
+    <section class="card" aria-labelledby="protection-title">
+        <div class="card__header">
+            <div>
+                <h2 id="protection-title" class="card__title">Resource protection</h2>
+                <p class="card__subtitle">
+                    {% if governor_mode == "enforced" %}
+                        The Governor is assigning tenant sessions to their cgroups.
+                    {% else %}
+                        How GateKeeper isolates tenants. In stub mode none of these controls are active yet.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="feature-grid">
+            <div class="feature">
+                <div class="feature__head">{{ icon("cpu") }}<span>CPU control</span></div>
+                <p>Each plan's CPU quota is written to the tenant cgroup's <code>cpu.max</code>, so the kernel scheduler caps it.</p>
+            </div>
+            <div class="feature">
+                <div class="feature__head">{{ icon("memory") }}<span>Memory usage</span></div>
+                <p>Read from <code>memory.current</code> and capped by <code>memory.max</code> for the tenant's plan.</p>
+            </div>
+            <div class="feature">
+                <div class="feature__head">{{ icon("activity") }}<span>Throttling</span></div>
+                <p>Detected from <code>cpu.stat</code> when the kernel holds back a tenant that reached its quota.</p>
+            </div>
+            <div class="feature">
+                <div class="feature__head">{{ icon("layers") }}<span>Tenant isolation</span></div>
+                <p>Session pooling keeps each tenant on its own PostgreSQL backend process inside its own cgroup.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="card" aria-labelledby="live-title">
+        <div class="card__header">
+            <div>
+                <h2 id="live-title" class="card__title">Live usage and throttle log</h2>
+                <p class="card__subtitle">Planned for Phase III.</p>
+            </div>
+            {{ ui.badge("Phase III", "neutral") }}
+        </div>
+        <div class="placeholder-panel" id="live-usage">
+            {{ ui.empty_state("Not connected yet", "A live CPU and memory chart and a timestamped throttle-event log will poll the usage endpoint every 1–2 seconds.", "chart") }}
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/app.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/admin.js') }}" defer></script>
+{% endblock %}

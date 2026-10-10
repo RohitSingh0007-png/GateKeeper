@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% from "macros/layout.html" import icon %}
+{% import "macros/ui.html" as ui with context %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block styles %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/dashboard.css') }}">
+{% endblock %}
+
+{% block content %}
+<header class="page-header">
+    <div>
+        <p class="eyebrow">Tenant workspace</p>
+        <h1>Welcome back, {{ tenant.name }}</h1>
+        <div class="meta-row">
+            <span class="meta">Tenant ID <code>{{ tenant.id }}</code></span>
+            {{ ui.plan_badge(tenant.plan) }}
+            {% if usage %}{{ ui.badge("Session active", "success") }}{% else %}{{ ui.badge("No open session", "neutral") }}{% endif %}
+        </div>
+    </div>
+</header>
+
+<section class="stat-grid" aria-label="Overview">
+    {{ ui.stat("Customers", customer_count, hint="View customers", href="/tenant/customers") }}
+    {{ ui.stat("Orders", order_count, hint="View orders", href="/tenant/orders") }}
+    {{ ui.stat("Plan", tenant.plan | title, hint=tenant.cpu_quota_percent ~ "% CPU · " ~ tenant.memory_limit_mb ~ " MB memory") }}
+    {{ ui.stat("Database session", "Active" if usage else "Idle", hint="Routed through the Governor") }}
+</section>
+
+<div class="grid-2">
+    <section class="card" aria-labelledby="session-title">
+        <div class="card__header">
+            <div>
+                <h2 id="session-title" class="card__title">Database session</h2>
+                <p class="card__subtitle">
+                    {% if governor_mode == "enforced" %}
+                        Protected by GateKeeper. CPU and memory limits are enforced by the kernel through this tenant's cgroup.
+                    {% else %}
+                        Development stub. Values are simulated and no cgroup limits are applied.
+                    {% endif %}
+                </p>
+            </div>
+            {% if governor_mode == "enforced" %}{{ ui.badge("Protected", "success") }}{% else %}{{ ui.badge("Not enforced", "warning") }}{% endif %}
+        </div>
+
+        {% if usage %}
+        <div class="meters">
+            {{ ui.meter("CPU", usage.cpu_percent, tenant.cpu_quota_percent, "%", "cpu", decimals=1) }}
+            {{ ui.meter("Memory", usage.memory_used_mb, tenant.memory_limit_mb, " MB", "memory") }}
+        </div>
+        <dl class="kv">
+            <div><dt>Session status</dt><dd>Active</dd></div>
+            <div><dt>Protection</dt><dd>{{ "Cgroup enforced" if governor_mode == "enforced" else "Stub mode, not enforced" }}</dd></div>
+            <div><dt>Throttled in last sample</dt><dd>{{ "{:,}".format(usage.throttled_ms) }} ms</dd></div>
+            <div><dt>Last sample</dt><dd><time datetime="{{ usage.timestamp }}" data-local-time>{{ usage.timestamp }}</time></dd></div>
+        </dl>
+        {% else %}
+        {{ ui.empty_state("No open database session", "Usage appears here once this tenant has an active connection through the Governor.", "activity") }}
+        {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="actions-title">
+        <h2 id="actions-title" class="card__title">Actions</h2>
+        <div class="action-list">
+            <a class="action" href="/tenant/customers">
+                {{ icon("users") }}
+                <span class="action__text"><strong>View customers</strong><small>{{ customer_count }} records</small></span>
+                <span class="action__chevron">{{ icon("chevron") }}</span>
+            </a>
+            <a class="action" href="/tenant/orders">
+                {{ icon("file") }}
+                <span class="action__text"><strong>View orders</strong><small>{{ order_count }} records</small></span>
+                <span class="action__chevron">{{ icon("chevron") }}</span>
+            </a>
+        </div>
+
+        <div class="report" id="report" data-report-url="{{ report_url }}">
+            <div>
+                <h3>Generate heavy report</h3>
+                <p class="report__desc">Runs a deliberately expensive query across all of your orders. This is the workload the Governor is designed to contain so other tenants stay fast.</p>
+            </div>
+            <button type="button" class="btn btn--primary" id="report-button">{{ icon("activity") }}<span>Generate heavy report</span></button>
+            <p class="report__status" id="report-status" role="status" aria-live="polite"></p>
+            <div class="report__result" id="report-result" hidden></div>
+        </div>
+    </section>
+</div>
+
+<section class="card card--flush" aria-labelledby="recent-title">
+    <div class="card__header">
+        <div>
+            <h2 id="recent-title" class="card__title">Recent orders</h2>
+            <p class="card__subtitle">The latest activity in your workspace.</p>
+        </div>
+        <a class="section-link" href="/tenant/orders">View all</a>
+    </div>
+    {% if recent_orders %}
+    <div class="table-wrap">
+        <table class="table">
+            <caption class="sr-only">Recent orders</caption>
+            <thead>
+                <tr>
+                    <th scope="col">Order ID</th>
+                    <th scope="col">Customer</th>
+                    <th scope="col">Date</th>
+                    <th scope="col">Status</th>
+                    <th scope="col" class="num">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in recent_orders %}
+                <tr>
+                    <td class="mono">#{{ order.id }}</td>
+                    <td>{{ order.customer }}</td>
+                    <td class="muted">{{ order.created_at }}</td>
+                    <td>{{ ui.record_badge(order.status) }}</td>
+                    <td class="num">{{ ui.money(order.amount) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {{ ui.empty_state("No orders yet", "Orders placed in your workspace will show up here.") }}
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/app.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/tenant.js') }}" defer></script>
+{% endblock %}
