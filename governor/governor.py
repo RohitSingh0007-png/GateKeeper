@@ -1,10 +1,12 @@
 import os
 import threading
 
+from dotenv import load_dotenv
 from psycopg2 import pool
 
 CGROUP_ROOT = "/sys/fs/cgroup"
 CPU_PERIOD_US = 100000
+load_dotenv()
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
